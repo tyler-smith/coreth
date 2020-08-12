@@ -14,6 +14,8 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/ava-labs/gecko/vms/components/ava"
+
 	"github.com/ava-labs/coreth"
 	"github.com/ava-labs/coreth/core"
 	"github.com/ava-labs/coreth/core/types"
@@ -84,6 +86,7 @@ type VM struct {
 	genesisHash       common.Hash
 	chain             *coreth.ETHChain
 	chaindb           Database
+	avmPrefixedState  ava.PrefixedState
 	newBlockChan      chan *Block
 	networkChan       chan<- commonEng.Message
 	newTxPoolHeadChan chan core.NewTxPoolHeadEvent
@@ -117,6 +120,7 @@ type VM struct {
 func (vm *VM) Initialize(
 	ctx *snow.Context,
 	db database.Database,
+	avmPrefixedState ava.PrefixedState,
 	b []byte,
 	toEngine chan<- commonEng.Message,
 	fxs []*commonEng.Fx,
@@ -127,6 +131,7 @@ func (vm *VM) Initialize(
 
 	vm.ctx = ctx
 	vm.chaindb = Database{db}
+	vm.avmPrefixedState = avmPrefixedState
 	g := new(core.Genesis)
 	err := json.Unmarshal(b, g)
 	if err != nil {
@@ -321,6 +326,7 @@ func (vm *VM) ParseBlock(b []byte) (snowman.Block, error) {
 		bytes.Compare(ethBlock.Coinbase().Bytes(), coreth.BlackholeAddr.Bytes()) != 0 {
 		return nil, errInvalidBlock
 	}
+
 	block := &Block{
 		id:       ids.NewID(blockHash),
 		ethBlock: ethBlock,
@@ -367,8 +373,8 @@ func (vm *VM) CreateHandlers() map[string]*commonEng.HTTPHandler {
 	handler.RegisterName("admin", &admin.Performance{})
 
 	return map[string]*commonEng.HTTPHandler{
-		"/rpc": &commonEng.HTTPHandler{LockOptions: commonEng.NoLock, Handler: handler},
-		"/ws":  &commonEng.HTTPHandler{LockOptions: commonEng.NoLock, Handler: handler.WebsocketHandler([]string{"*"})},
+		"/rpc": {LockOptions: commonEng.NoLock, Handler: handler},
+		"/ws":  {LockOptions: commonEng.NoLock, Handler: handler.WebsocketHandler([]string{"*"})},
 	}
 }
 
@@ -377,8 +383,8 @@ func (vm *VM) CreateStaticHandlers() map[string]*commonEng.HTTPHandler {
 	handler := rpc.NewServer()
 	handler.RegisterName("static", &StaticService{})
 	return map[string]*commonEng.HTTPHandler{
-		"/rpc": &commonEng.HTTPHandler{LockOptions: commonEng.NoLock, Handler: handler},
-		"/ws":  &commonEng.HTTPHandler{LockOptions: commonEng.NoLock, Handler: handler.WebsocketHandler([]string{"*"})},
+		"/rpc": {LockOptions: commonEng.NoLock, Handler: handler},
+		"/ws":  {LockOptions: commonEng.NoLock, Handler: handler.WebsocketHandler([]string{"*"})},
 	}
 }
 

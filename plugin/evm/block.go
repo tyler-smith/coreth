@@ -7,6 +7,7 @@ import (
 	"fmt"
 
 	"github.com/ava-labs/coreth/core/types"
+	"github.com/ava-labs/gecko/vms/components/ava"
 	"github.com/ava-labs/go-ethereum/rlp"
 
 	"github.com/ava-labs/gecko/ids"
@@ -27,6 +28,24 @@ func (b *Block) ID() ids.ID { return b.id }
 // Accept implements the snowman.Block interface
 func (b *Block) Accept() error {
 	b.vm.ctx.Log.Verbo("Block %s is accepted", b.ID())
+
+	// If this block has import txs we need to validate the shared utxos exist
+	// if isImportBlock {
+	importedUtxos := []ids.ID{}
+	for _, utxo := range importedUtxos {
+		if err := b.vm.avmPrefixedState.SpendAVMUTXO(utxo); err != nil {
+			return err
+		}
+	}
+	// else if isExportBlock {
+	exportedUtxos := []*ava.UTXO{}
+	for _, utxo := range exportedUtxos {
+		if err := b.vm.avmPrefixedState.FundAVMUTXO(utxo); err != nil {
+			return err
+		}
+	}
+	// }
+
 	b.vm.updateStatus(b.ID(), choices.Accepted)
 	return nil
 }
@@ -61,6 +80,16 @@ func (b *Block) Parent() snowman.Block {
 
 // Verify implements the snowman.Block interface
 func (b *Block) Verify() error {
+	// If this block has import txs we need to validate the shared utxos exist
+	// if isImportBlock {
+	importedUtxos := []ids.ID{}
+	for _, utxo := range importedUtxos {
+		if _, err := b.vm.avmPrefixedState.AVMUTXO(utxo); err != nil {
+			return errInvalidBlock
+		}
+	}
+	// }
+
 	_, err := b.vm.chain.InsertChain([]*types.Block{b.ethBlock})
 	return err
 }
